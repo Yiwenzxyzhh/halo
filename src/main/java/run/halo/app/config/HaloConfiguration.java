@@ -25,12 +25,12 @@ import run.halo.app.security.handler.ContentAuthenticationFailureHandler;
 import run.halo.app.security.handler.DefaultAuthenticationFailureHandler;
 import run.halo.app.service.OptionService;
 import run.halo.app.service.UserService;
+import run.halo.app.utils.HaloUtils;
 import run.halo.app.utils.HttpClientUtils;
 
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.time.temporal.ChronoUnit;
 
 /**
  * Halo configuration.
@@ -52,7 +52,8 @@ public class HaloConfiguration {
     }
 
     @Bean
-    public RestTemplate httpsRestTemplate(RestTemplateBuilder builder) throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
+    public RestTemplate httpsRestTemplate(RestTemplateBuilder builder)
+            throws NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         RestTemplate httpsRestTemplate = builder.build();
         httpsRestTemplate.setRequestFactory(new HttpComponentsClientHttpRequestFactory(HttpClientUtils.createHttpsClient(
                 (int) haloProperties.getDownloadTimeout().toMillis())));
@@ -98,10 +99,20 @@ public class HaloConfiguration {
 
     @Bean
     public FilterRegistrationBean<ContentFilter> contentFilter(HaloProperties haloProperties,
-                                                               OptionService optionService) {
-        ContentFilter contentFilter = new ContentFilter(haloProperties, optionService);
+                                                               OptionService optionService,
+                                                               StringCacheStore cacheStore) {
+        ContentFilter contentFilter = new ContentFilter(haloProperties, optionService, cacheStore);
         contentFilter.setFailureHandler(new ContentAuthenticationFailureHandler());
-        contentFilter.addExcludeUrlPatterns("/api/**", "/install", "/version", "/admin/**", "/js/**", "/css/**");
+
+        String adminPattern = HaloUtils.ensureBoth(haloProperties.getAdminPath(), "/") + "**";
+
+        contentFilter.addExcludeUrlPatterns(
+                adminPattern,
+                "/api/**",
+                "/install",
+                "/version",
+                "/js/**",
+                "/css/**");
 
         FilterRegistrationBean<ContentFilter> contentFrb = new FilterRegistrationBean<>();
         contentFrb.addUrlPatterns("/*");
@@ -114,8 +125,9 @@ public class HaloConfiguration {
     @Bean
     public FilterRegistrationBean<ApiAuthenticationFilter> apiAuthenticationFilter(HaloProperties haloProperties,
                                                                                    ObjectMapper objectMapper,
-                                                                                   OptionService optionService) {
-        ApiAuthenticationFilter apiFilter = new ApiAuthenticationFilter(haloProperties, optionService);
+                                                                                   OptionService optionService,
+                                                                                   StringCacheStore cacheStore) {
+        ApiAuthenticationFilter apiFilter = new ApiAuthenticationFilter(haloProperties, optionService, cacheStore);
         apiFilter.addExcludeUrlPatterns(
                 "/api/content/*/comments",
                 "/api/content/**/comments/**",

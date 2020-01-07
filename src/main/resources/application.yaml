@@ -38,10 +38,18 @@ spring:
       ddl-auto: update
     show-sql: false
     open-in-view: false
+  flyway:
+    enabled: false
   servlet:
     multipart:
       max-file-size: 10240MB
       max-request-size: 10240MB
+management:
+  endpoints:
+    web:
+      base-path: /api/admin/actuator
+      exposure:
+        include: ['httptrace', 'metrics','env','logfile','health']
 logging:
   level:
     run.halo.app: INFO

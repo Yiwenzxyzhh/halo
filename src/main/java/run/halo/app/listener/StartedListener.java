@@ -1,20 +1,24 @@
 package run.halo.app.listener;
 
 import lombok.extern.slf4j.Slf4j;
+import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.lang.NonNull;
+import org.springframework.util.Assert;
 import org.springframework.util.ResourceUtils;
 import run.halo.app.config.properties.HaloProperties;
 import run.halo.app.model.properties.PrimaryProperties;
 import run.halo.app.service.OptionService;
 import run.halo.app.service.ThemeService;
-import run.halo.app.service.UserService;
 import run.halo.app.utils.FileUtils;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.*;
 import java.util.Collections;
@@ -23,7 +27,8 @@ import java.util.Collections;
  * The method executed after the application is started.
  *
  * @author ryanwang
- * @date : 2018/12/5
+ * @author guqing
+ * @date 2018-12-05
  */
 @Slf4j
 @Configuration
@@ -39,23 +44,47 @@ public class StartedListener implements ApplicationListener<ApplicationStartedEv
     @Autowired
     private ThemeService themeService;
 
-    @Autowired
-    private UserService userService;
+    @Value("${spring.datasource.url}")
+    private String url;
+
+    @Value("${spring.datasource.username}")
+    private String username;
+
+    @Value("${spring.datasource.password}")
+    private String password;
 
     @Override
     public void onApplicationEvent(ApplicationStartedEvent event) {
-        this.printStartInfo();
+        this.migrate();
         this.initThemes();
+        this.printStartInfo();
     }
 
     private void printStartInfo() {
         String blogUrl = optionService.getBlogBaseUrl();
 
         log.info("Halo started at         {}", blogUrl);
-        log.info("Halo admin started at   {}/halo{}", blogUrl, haloProperties.getAdminPath());
+        log.info("Halo admin started at   {}/{}", blogUrl, haloProperties.getAdminPath());
         if (!haloProperties.isDocDisabled()) {
-            log.debug("Halo doc was enable at  {}/swagger-ui.html", blogUrl);
+            log.debug("Halo api doc was enabled at  {}/swagger-ui.html", blogUrl);
         }
+        log.info("Halo has started successfully!");
+    }
+
+    /**
+     * Migrate database.
+     */
+    private void migrate() {
+        log.info("Starting migrate database...");
+        Flyway flyway = Flyway
+                .configure()
+                .locations("classpath:/migration")
+                .baselineVersion("1")
+                .baselineOnMigrate(true)
+                .dataSource(url, username, password)
+                .load();
+        flyway.migrate();
+        log.info("Migrate database succeed.");
     }
 
     /**
@@ -74,8 +103,9 @@ public class StartedListener implements ApplicationListener<ApplicationStartedEv
             Path source;
 
             if ("jar".equalsIgnoreCase(themeUri.getScheme())) {
+
                 // Create new file system for jar
-                FileSystem fileSystem = FileSystems.newFileSystem(themeUri, Collections.emptyMap());
+                FileSystem fileSystem = getFileSystem(themeUri);
                 source = fileSystem.getPath("/BOOT-INF/classes/" + ThemeService.THEME_FOLDER);
             } else {
                 source = Paths.get(themeUri);
@@ -96,4 +126,18 @@ public class StartedListener implements ApplicationListener<ApplicationStartedEv
         }
     }
 
+    @NonNull
+    private FileSystem getFileSystem(@NonNull URI uri) throws IOException {
+        Assert.notNull(uri, "Uri must not be null");
+
+        FileSystem fileSystem;
+
+        try {
+            fileSystem = FileSystems.getFileSystem(uri);
+        } catch (FileSystemNotFoundException e) {
+            fileSystem = FileSystems.newFileSystem(uri, Collections.emptyMap());
+        }
+
+        return fileSystem;
+    }
 }

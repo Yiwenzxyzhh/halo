@@ -1,7 +1,6 @@
 package run.halo.app.utils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
@@ -297,7 +296,7 @@ public class FileUtils {
         Assert.notNull(parentPath, "Parent path must not be null");
         Assert.notNull(pathToCheck, "Path to check must not be null");
 
-        if (pathToCheck.startsWith(parentPath.normalize())) {
+        if (pathToCheck.normalize().startsWith(parentPath)) {
             return;
         }
 
